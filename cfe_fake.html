@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Cupom Fiscal Eletrônico (CFE)</title>
+    <!-- Importando o Semantic UI CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/semantic-ui/dist/semantic.min.css">
+    <style>
+        /* Estilos personalizados */
+        body {
+            background-color: #f9f9f9;
+        }
+
+        .ui.container {
+            margin-top: 20px;
+        }
+
+        .item-row {
+            margin-bottom: 10px;
+        }
+
+        input[type="text"] {
+            text-transform: uppercase;
+        }
+
+        .ui.grid>.row {
+            padding-bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ui container">
+        <h2 class="ui header center aligned">Gerador de Cupom Fiscal Eletrônico (CFE)</h2>
+
+        <form class="ui form" id="cfeForm">
+            <!-- Dados da Empresa -->
+            <h4 class="ui dividing header">Dados da Empresa</h4>
+            <div class="fields">
+                <div class="eight wide field">
+                    <label>CNPJ</label>
+                    <input type="text" name="cnpj" placeholder="CNPJ" value="07.606.849/0001-52" required
+                        oninput="this.value = this.value.toUpperCase()">
+                </div>
+                <div class="eight wide field">
+                    <label>IE</label>
+                    <input type="text" name="ie" placeholder="IE" value="36952881-6" required
+                        oninput="this.value = this.value.toUpperCase()">
+                </div>
+            </div>
+            <div class="field">
+                <label>Endereço</label>
+                <input type="text" name="endereco" placeholder="Endereço"
+                    value="AV. SANTOS DUMONT, 12 - ALDEOTA - FORTALEZA -CE" required
+                    oninput="this.value = this.value.toUpperCase()">
+            </div>
+            <div class="field">
+                <label>Logotipo da Empresa (opcional)</label>
+                <input type="file" name="logo" accept="image/*">
+            </div>
+
+            <!-- Itens -->
+            <h4 class="ui dividing header">Itens</h4>
+            <div id="items">
+                <div class="fields item-row">
+                    <div class="four wide field">
+                        <label>Nome do Produto</label>
+                        <input type="text" name="productName[]" placeholder="Nome do produto" required
+                            oninput="this.value = this.value.toUpperCase()">
+                    </div>
+                    <div class="two wide field">
+                        <label>Quantidade</label>
+                        <input type="number" name="productQuantity[]" placeholder="Quantidade" min="1" step="1"
+                            required>
+                    </div>
+                    <div class="three wide field">
+                        <label>Valor Unitário (R$)</label>
+                        <input type="number" step="0.01" name="productValue[]" placeholder="Valor unitário" min="0.01"
+                            required>
+                    </div>
+                    <div class="two wide field">
+                        <label>Desconto (%)</label>
+                        <input type="number" step="0.01" name="productDiscount[]" placeholder="Desconto" min="0"
+                            max="100">
+                    </div>
+                    <div class="two wide field">
+                        <label>Taxa (%)</label>
+                        <input type="number" step="0.01" name="productTax[]" placeholder="Taxa" min="0" max="100">
+                    </div>
+                    <div class="three wide field">
+                        <label>&nbsp;</label>
+                        <button type="button" class="ui red button remove-item">Remover</button>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="ui button" id="addItem">Adicionar Item</button>
+
+            <!-- Formas de Pagamento -->
+            <h4 class="ui dividing header">Forma de Pagamento</h4>
+            <div class="field">
+                <label>Selecione as formas de pagamento utilizadas:</label>
+                <div class="ui checkbox">
+                    <input type="checkbox" name="formaPagamento[]" value="DINHEIRO">
+                    <label>DINHEIRO</label>
+                </div>
+                <div class="ui checkbox">
+                    <input type="checkbox" name="formaPagamento[]" value="CARTÃO DE CRÉDITO">
+                    <label>CARTÃO DE CRÉDITO</label>
+                </div>
+                <div class="ui checkbox">
+                    <input type="checkbox" name="formaPagamento[]" value="CARTÃO DE DÉBITO">
+                    <label>CARTÃO DE DÉBITO</label>
+                </div>
+                <div class="ui checkbox">
+                    <input type="checkbox" name="formaPagamento[]" value="PIX">
+                    <label>PIX</label>
+                </div>
+            </div>
+
+            <!-- Botão para Gerar o CFE -->
+            <button class="ui primary button" type="submit">Gerar CFE</button>
+        </form>
+    </div>
+
+    <!-- Importando as bibliotecas necessárias -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/semantic-ui/dist/semantic.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+            // Inicializar componentes do Semantic UI
+            $('.ui.dropdown').dropdown();
+            $('.ui.checkbox').checkbox();
+
+            // Função para adicionar novos itens
+            $('#addItem').click(function () {
+                const itemRow = `
+                <div class="fields item-row">
+                    <div class="four wide field">
+                        <input type="text" name="productName[]" placeholder="Nome do produto" required oninput="this.value = this.value.toUpperCase()">
+                    </div>
+                    <div class="two wide field">
+                        <input type="number" name="productQuantity[]" placeholder="Quantidade" min="1" step="1" required>
+                    </div>
+                    <div class="three wide field">
+                        <input type="number" step="0.01" name="productValue[]" placeholder="Valor unitário" min="0.01" required>
+                    </div>
+                    <div class="two wide field">
+                        <input type="number" step="0.01" name="productDiscount[]" placeholder="Desconto" min="0" max="100">
+                    </div>
+                    <div class="two wide field">
+                        <input type="number" step="0.01" name="productTax[]" placeholder="Taxa" min="0" max="100">
+                    </div>
+                    <div class="three wide field">
+                        <button type="button" class="ui red button remove-item">Remover</button>
+                    </div>
+                </div>`;
+                $('#items').append(itemRow);
+            });
+
+            // Função para remover itens
+            $(document).on('click', '.remove-item', function () {
+                $(this).closest('.item-row').remove();
+            });
+
+            // Função para formatar valores monetários
+            function formatCurrency(value) {
+                return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            }
+
+            // Ao enviar o formulário
+            $('#cfeForm').submit(function (e) {
+                e.preventDefault();
+
+                const { jsPDF } = window.jspdf;
+
+                // Dados da empresa
+                const cnpj = $('input[name="cnpj"]').val();
+                const ie = $('input[name="ie"]').val();
+                const endereco = $('input[name="endereco"]').val();
+
+                // Logotipo (opcional)
+                const logoFile = $('input[name="logo"]')[0].files[0];
+
+                // Formas de pagamento
+                const formasPagamento = $('input[name="formaPagamento[]"]:checked').map(function () {
+                    return $(this).val();
+                }).get();
+
+                if (formasPagamento.length === 0) {
+                    alert('Por favor, selecione pelo menos uma forma de pagamento.');
+                    return;
+                }
+
+                // Dados dos produtos
+                const productNames = $('input[name="productName[]"]').map(function () { return $(this).val(); }).get();
+                const productQuantities = $('input[name="productQuantity[]"]').map(function () { return parseFloat($(this).val()); }).get();
+                const productValues = $('input[name="productValue[]"]').map(function () { return parseFloat($(this).val()); }).get();
+                const productDiscounts = $('input[name="productDiscount[]"]').map(function () { return parseFloat($(this).val()) || 0; }).get();
+                const productTaxes = $('input[name="productTax[]"]').map(function () { return parseFloat($(this).val()) || 0; }).get();
+
+                // Validações adicionais
+                let valid = true;
+                for (let i = 0; i < productNames.length; i++) {
+                    if (productQuantities[i] <= 0 || isNaN(productQuantities[i])) {
+                        alert('A quantidade deve ser um número positivo.');
+                        valid = false;
+                        break;
+                    }
+                    if (productValues[i] <= 0 || isNaN(productValues[i])) {
+                        alert('O valor unitário deve ser um número positivo.');
+                        valid = false;
+                        break;
+                    }
+                    if (productDiscounts[i] < 0 || productDiscounts[i] > 100) {
+                        alert('O desconto deve ser entre 0% e 100%.');
+                        valid = false;
+                        break;
+                    }
+                    if (productTaxes[i] < 0 || productTaxes[i] > 100) {
+                        alert('A taxa deve ser entre 0% e 100%.');
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (!valid) {
+                    return;
+                }
+
+                // Cálculo do total
+                let totalItens = 0;
+                let totalProdutos = 0;
+
+                // Array para armazenar os itens formatados
+                const items = [];
+
+                for (let i = 0; i < productNames.length; i++) {
+                    const quantity = productQuantities[i];
+                    const unitValue = productValues[i];
+                    const discountPercent = productDiscounts[i];
+                    const taxPercent = productTaxes[i];
+
+                    // Calculando desconto e taxa
+                    const discountValue = (unitValue * discountPercent) / 100;
+                    const valueAfterDiscount = unitValue - discountValue;
+                    const taxValue = (valueAfterDiscount * taxPercent) / 100;
+                    const finalUnitValue = valueAfterDiscount + taxValue;
+
+                    const totalValue = finalUnitValue * quantity;
+
+                    totalItens += quantity;
+                    totalProdutos += totalValue;
+
+                    items.push({
+                        name: productNames[i],
+                        quantity: quantity,
+                        unitValue: unitValue,
+                        discountPercent: discountPercent,
+                        discountValue: discountValue,
+                        taxPercent: taxPercent,
+                        taxValue: taxValue,
+                        finalUnitValue: finalUnitValue,
+                        totalValue: totalValue
+                    });
+                }
+
+                // Formatação dos totais
+                const formattedTotalProdutos = formatCurrency(totalProdutos);
+                const formattedTotalItens = totalItens.toFixed(3);
+
+                // Gerando um número de chave de acesso aleatório (44 dígitos)
+                const chaveAcesso = Array.from({ length: 44 }, () => Math.floor(Math.random() * 10)).join('');
+
+                // Gerando o QR Code
+                QRCode.toDataURL(chaveAcesso, { width: 150, margin: 1 }, function (err, url) {
+
+                    // Criando uma nova instância do jsPDF
+                    const doc = new jsPDF();
+
+                    // Configurando o estilo
+                    doc.setFontSize(12);
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFont('Courier', 'Normal');
+
+                    let yPosition = 20;
+
+                    // Função para gerar o conteúdo do PDF
+                    function generatePDFContent(logoDataUrl) {
+                        // Inserindo o logotipo se disponível
+                        if (logoDataUrl) {
+                            doc.addImage(logoDataUrl, 'PNG', 80, 10, 50, 20);
+                            yPosition += 20;
+                        }
+
+                        // Cabeçalho do documento
+                        doc.setFontSize(10);
+                        doc.text('CF-E EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO', 105, yPosition, null, null, 'center');
+                        yPosition += 5;
+                        doc.text('SEM VALOR FISCAL', 105, yPosition, null, null, 'center');
+                        yPosition += 10;
+
+                        // Dados da empresa
+                        doc.setFontSize(10);
+                        doc.text(`CNPJ: ${cnpj}   IE: ${ie}`, 105, yPosition, null, null, 'center');
+                        yPosition += 5;
+                        doc.text(endereco, 105, yPosition, null, null, 'center');
+                        yPosition += 5;
+                        doc.text('Documento Auxiliar de Cupom Fiscal Eletrônico', 105, yPosition, null, null, 'center');
+                        yPosition += 5;
+                        doc.text('para Consumidor Final', 105, yPosition, null, null, 'center');
+                        yPosition += 10;
+
+                        // Linha divisória
+                        doc.line(20, yPosition, 190, yPosition);
+                        yPosition += 5;
+
+                        // Detalhes da venda
+                        doc.setFontSize(12);
+                        doc.text('DETALHE DA VENDA', 105, yPosition, null, null, 'center');
+                        yPosition += 5;
+                        doc.setFontSize(10);
+
+                        // Alinhamento das colunas
+                        const codigoX = 20;
+                        const descricaoX = 30;
+                        const quantidadeX = 80;
+                        const unitarioX = 95;
+                        const descontoX = 125;
+                        const taxaX = 140;
+                        const totalX = 165;
+
+                        // Cabeçalho das colunas
+                        doc.text('CÓD', codigoX, yPosition);
+                        doc.text('DESCRIÇÃO', descricaoX, yPosition);
+                        doc.text('QTD', quantidadeX, yPosition);
+                        doc.text('UN', unitarioX, yPosition);
+                        doc.text('DESC', descontoX, yPosition);
+                        doc.text('TAXA', taxaX, yPosition);
+                        doc.text('VLR', totalX, yPosition);
+                        yPosition += 5;
+
+                        // Listando os itens
+                        for (let i = 0; i < items.length; i++) {
+                            doc.text(`${(i + 1).toString().padStart(2, '0')}`, codigoX, yPosition);
+                            doc.text(items[i].name.substring(0, 30), descricaoX, yPosition);
+                            doc.text(items[i].quantity.toFixed(3), quantidadeX + 8, yPosition, null, null, 'right');
+                            doc.text(formatCurrency(items[i].unitValue), unitarioX + 18, yPosition, null, null, 'right');
+                            doc.text(`${items[i].discountPercent.toFixed(2)}%`, descontoX + 10, yPosition, null, null, 'right');
+                            doc.text(`${items[i].taxPercent.toFixed(2)}%`, taxaX + 10, yPosition, null, null, 'right');
+                            doc.text(formatCurrency(items[i].totalValue), totalX + 20, yPosition, null, null, 'right');
+                            yPosition += 5;
+
+                            // Exibir valores de desconto e taxa se aplicáveis
+                            if (items[i].discountValue > 0) {
+                                doc.text(`Desconto: ${formatCurrency(items[i].discountValue)}`, descricaoX, yPosition);
+                                yPosition += 5;
+                            }
+                            if (items[i].taxValue > 0) {
+                                doc.text(`Taxa: ${formatCurrency(items[i].taxValue)}`, descricaoX, yPosition);
+                                yPosition += 5;
+                            }
+                        }
+
+                        yPosition += 5;
+                        doc.text(`QTD. TOTAL DE ITENS: ${formattedTotalItens}`, codigoX, yPosition);
+                        yPosition += 5;
+                        doc.text(`VALOR DOS PRODUTOS: ${formattedTotalProdutos}`, codigoX, yPosition);
+                        yPosition += 5;
+                        doc.text(`VALOR TOTAL: ${formattedTotalProdutos}`, codigoX, yPosition);
+                        yPosition += 5;
+                        doc.text(`FORMA DE PAGAMENTO: ${formasPagamento.join(', ')}`, codigoX, yPosition);
+                        yPosition += 10;
+
+                        // Linha divisória
+                        doc.line(20, yPosition, 190, yPosition);
+                        yPosition += 5;
+
+                        // Chave de acesso
+                        doc.text('CHAVE DE ACESSO:', codigoX, yPosition);
+                        yPosition += 5;
+                        doc.setFontSize(10);
+                        doc.text(chaveAcesso.replace(/(.{4})/g, '$1 '), codigoX, yPosition);
+                        yPosition += 10;
+
+                        // Detalhes adicionais
+                        const protocolo = Math.floor(Math.random() * 1000000000000000);
+                        doc.text(`Protocolo de Autorização: ${protocolo}`, codigoX, yPosition);
+                        yPosition += 5;
+                        const data = new Date();
+                        const dataFormatada = data.toLocaleDateString('pt-BR');
+                        const horaFormatada = data.toLocaleTimeString('pt-BR');
+                        doc.text(`Data/Hora: ${dataFormatada} ${horaFormatada}`, codigoX, yPosition);
+                        yPosition += 10;
+
+                        // QR Code
+                        doc.addImage(url, 'PNG', 80, yPosition, 50, 50);
+                        yPosition += 60;
+
+                        // Rodapé
+                        doc.setFontSize(10);
+                        doc.text('EMITIDA EM AMBIENTE DE HOMOLOGAÇÃO', 105, yPosition, null, null, 'center');
+                        yPosition += 5;
+                        doc.text('SEM VALOR FISCAL', 105, yPosition, null, null, 'center');
+
+                        // Abrindo o PDF em uma nova aba
+                        window.open(doc.output('bloburl'), '_blank');
+                    }
+
+                    // Se o logotipo foi fornecido, carregue-o; caso contrário, gere o PDF sem logotipo
+                    if (logoFile) {
+                        const reader = new FileReader();
+                        reader.onload = function (event) {
+                            const logoDataUrl = event.target.result;
+                            generatePDFContent(logoDataUrl);
+                        };
+                        reader.readAsDataURL(logoFile);
+                    } else {
+                        generatePDFContent(null);
+                    }
+
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>
